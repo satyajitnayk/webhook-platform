@@ -17,3 +17,7 @@ func (q *Queue) Enqueue(delivery Delivery) {
 func (q *Queue) Jobs() <-chan Delivery {
 	return q.jobs
 }
+
+func (q *Queue) Close() {
+	close(q.jobs)
+}

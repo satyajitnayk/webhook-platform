@@ -2,12 +2,22 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 func main() {
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		os.Interrupt,
+		syscall.SIGTERM,
+	)
+	defer stop()
 
 	db, err := connectDB(ctx)
 	if err != nil {
@@ -45,9 +55,42 @@ func main() {
 		getDeliveryHandler(db),
 	)
 
-	log.Println("server running on :8080")
-
-	if err := http.ListenAndServe(":8080", mux); err != nil {
-		log.Fatal(err)
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: mux,
 	}
+
+	// Start HTTP server
+	go func() {
+		log.Println("server running on :8080")
+
+		if err := server.ListenAndServe(); err != nil &&
+			!errors.Is(err, http.ErrServerClosed) {
+
+			log.Fatalf("server failed: %v", err)
+		}
+	}()
+
+	// Wait for Ctrl+C / SIGTERM
+	<-ctx.Done()
+
+	log.Println("shutdown started")
+
+	// Give HTTP requests time to finish
+	shutdownCtx, cancel := context.WithTimeout(
+		context.Background(),
+		10*time.Second,
+	)
+	defer cancel()
+
+	// Stop HTTP server
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("server shutdown error: %v", err)
+	}
+
+	// stop workers
+	queue.Close()
+
+	log.Println("shutdown complete")
+
 }

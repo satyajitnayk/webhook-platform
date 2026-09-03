@@ -44,6 +44,7 @@ func (w *Worker) Start(ctx context.Context) {
 
 		case delivery, ok := <-w.queue.Jobs():
 			if !ok {
+				log.Printf("worker %d stopped", w.id)
 				return
 			}
 
