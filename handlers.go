@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -78,18 +80,83 @@ func createEventHandler(
 			return
 		}
 
+		deliveryIDs := make([]string, 0, len(deliveries))
+
 		for _, delivery := range deliveries {
+			deliveryIDs = append(deliveryIDs, delivery.ID)
+
 			queue.Enqueue(delivery)
 		}
 
 		response := map[string]any{
 			"event_id":   eventID,
 			"deliveries": deliveryCount,
+			"delivery_ids": deliveryIDs,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 
 		json.NewEncoder(w).Encode(response)
+	}
+}
+
+func getDeliveryHandler(db *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		deliveryID := r.PathValue("id")
+
+		if deliveryID == "" {
+			http.Error(w, "delivery id is required", http.StatusBadRequest)
+			return
+		}
+
+		var delivery Delivery
+
+		err := db.QueryRow(
+			r.Context(),
+			`
+			SELECT
+				id,
+				event_id,
+				webhook_id,
+				status,
+				attempts,
+				created_at
+			FROM deliveries
+			WHERE id = $1
+			`,
+			deliveryID,
+		).Scan(
+			&delivery.ID,
+			&delivery.EventID,
+			&delivery.WebhookID,
+			&delivery.Status,
+			&delivery.Attempts,
+			&delivery.CreatedAt,
+		)
+
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				http.Error(w, "delivery not found", http.StatusNotFound)
+				return
+			}
+
+			http.Error(
+				w,
+				"failed to get delivery",
+				http.StatusInternalServerError,
+			)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(delivery); err != nil {
+			http.Error(
+				w,
+				"failed to encode response",
+				http.StatusInternalServerError,
+			)
+		}
 	}
 }

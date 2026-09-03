@@ -40,6 +40,11 @@ func main() {
 		createEventHandler(db, queue),
 	)
 
+	mux.HandleFunc(
+		"GET /deliveries/{id}",
+		getDeliveryHandler(db),
+	)
+
 	log.Println("server running on :8080")
 
 	if err := http.ListenAndServe(":8080", mux); err != nil {
