@@ -39,3 +39,12 @@ type CreateEventRequest struct {
 	Type    string         `json:"type"`
 	Payload map[string]any `json:"payload"`
 }
+
+const (
+	DeliveryPending    = "pending"
+	DeliveryProcessing = "processing"
+	DeliverySuccess    = "success"
+	DeliveryFailed     = "failed"
+
+	MaxAttempts = 4
+)

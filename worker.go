@@ -12,6 +12,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+func retryDelay(attempt int) time.Duration {
+	return time.Second * time.Duration(1<<(attempt-1))
+}
+
 type Worker struct {
 	id     int
 	queue  *Queue
@@ -48,6 +52,14 @@ func (w *Worker) process(
 	ctx context.Context,
 	delivery Delivery,
 ) {
+	attempts, ok := w.claimDelivery(ctx, delivery.ID)
+
+	if !ok {
+		return
+	}
+
+	delivery.Attempts = attempts
+
 	log.Printf(
 		"worker=%d processing delivery=%s",
 		w.id,
@@ -121,13 +133,13 @@ func (w *Worker) process(
 
 	resp, err := w.client.Do(req)
 	if err != nil {
-		w.markFailed(ctx, delivery.ID)
 		log.Printf(
 			"worker=%d delivery=%s failed: %v",
 			w.id,
 			delivery.ID,
 			err,
 		)
+		w.handleFailure(ctx, delivery)
 		return
 	}
 
@@ -146,7 +158,7 @@ func (w *Worker) process(
 		return
 	}
 
-	w.markFailed(ctx, delivery.ID)
+	w.handleFailure(ctx, delivery)
 
 	log.Printf(
 		"worker=%d delivery=%s failed status=%d",
@@ -164,15 +176,19 @@ func (w *Worker) markSuccess(
 		ctx,
 		`
 		UPDATE deliveries
-		SET status = 'success',
-		    attempts = attempts + 1
-		WHERE id = $1
+		SET status = $1,
+		WHERE id = $2
 		`,
+		DeliverySuccess,
 		deliveryID,
 	)
 
 	if err != nil {
-		log.Printf("failed updating delivery: %v", err)
+		log.Printf(
+			"failed marking delivery=%s success: %v",
+			deliveryID,
+			err,
+		)
 	}
 }
 
@@ -194,6 +210,114 @@ func (w *Worker) markFailed(
 	if err != nil {
 		log.Printf("failed updating delivery: %v", err)
 	}
+}
+
+func (w *Worker) handleFailure(
+	ctx context.Context,
+	delivery Delivery,
+) {
+
+	if delivery.Attempts >= MaxAttempts {
+
+		_, err := w.db.Exec(
+			ctx,
+			`
+			UPDATE deliveries
+			SET status = $1
+			WHERE id = $2
+			`,
+			DeliveryFailed,
+			delivery.ID,
+		)
+
+		if err != nil {
+			log.Printf(
+				"failed marking delivery=%s permanently failed: %v",
+				delivery.ID,
+				err,
+			)
+		}
+
+		return
+	}
+
+	_, err := w.db.Exec(
+		ctx,
+		`
+		UPDATE deliveries
+		SET status = $1
+		WHERE id = $2
+		`,
+		DeliveryPending,
+		delivery.ID,
+	)
+
+	if err != nil {
+		log.Printf(
+			"failed scheduling retry delivery=%s: %v",
+			delivery.ID,
+			err,
+		)
+		return
+	}
+
+	delay := retryDelay(delivery.Attempts)
+
+	log.Printf(
+		"delivery=%s attempt=%d retry in %s",
+		delivery.ID,
+		delivery.Attempts,
+		delay,
+	)
+
+	// retry
+	go func() {
+		time.Sleep(delay)
+
+		w.queue.Enqueue(delivery)
+	}()
+
+}
+
+func (w *Worker) claimDelivery(
+	ctx context.Context,
+	deliveryID string,
+) (int, bool) {
+	var attempts int
+
+	// We use QueryRow instead of Exec because the 'RETURNING' clause acts like a SELECT.
+	//
+	// WHY WE DO THIS:
+	// 1. Efficiency: Avoids a second round-trip to the database (eliminates a separate SELECT query).
+	// 2. Concurrency Safety: 'attempts = attempts + 1' is atomic inside the DB. RETURNING
+	//    guarantees our Go code gets the exact value from *this* update, preventing race
+	//    conditions if multiple concurrent workers process the same delivery.
+	err := w.db.QueryRow(
+		ctx,
+		`
+		UPDATE deliveries
+		SET
+			status = $1,
+			attempts = attempts + 1
+		WHERE id = $2
+		  AND status = $3
+		RETURNING attempts
+		`,
+		DeliveryProcessing,
+		deliveryID,
+		DeliveryPending,
+	).Scan(&attempts)
+
+	if err != nil {
+		log.Printf(
+			"failed claiming delivery=%s: %v",
+			deliveryID,
+			err,
+		)
+		return 0, false
+	}
+
+	return attempts, true
 }
 
 // -------------------------
