@@ -27,11 +27,13 @@ func main() {
 
 	queue := NewQueue(1000)
 
-	for i := 1; i <= 3; i++ {
-		worker := NewWorker(i, queue, db)
+	workerPool := NewWorkerPool(
+		3,
+		queue,
+		db,
+	)
 
-		go worker.Start(ctx)
-	}
+	workerPool.Start()
 
 	mux := http.NewServeMux()
 
@@ -76,7 +78,8 @@ func main() {
 
 	log.Println("shutdown started")
 
-	// Give HTTP requests time to finish
+	// Stop accepting new requests and wait for
+	// in-flight requests to finish.
 	shutdownCtx, cancel := context.WithTimeout(
 		context.Background(),
 		10*time.Second,
@@ -91,6 +94,10 @@ func main() {
 	// stop workers
 	queue.Close()
 
-	log.Println("shutdown complete")
+	log.Println("waiting for workers to finish")
 
+	// Workers drain remaining jobs and exit.
+	workerPool.Wait()
+
+	log.Println("shutdown complete")
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -33,24 +34,14 @@ func NewWorker(
 	}
 }
 
-func (w *Worker) Start(ctx context.Context) {
+func (w *Worker) Start() {
 	log.Printf("worker %d started", w.id)
 
-	for {
-		select {
-		case <-ctx.Done():
-			log.Printf("worker %d stopped", w.id)
-			return
-
-		case delivery, ok := <-w.queue.Jobs():
-			if !ok {
-				log.Printf("worker %d stopped", w.id)
-				return
-			}
-
-			w.process(ctx, delivery)
-		}
+	for delivery := range w.queue.Jobs() {
+		w.process(context.Background(), delivery)
 	}
+
+	log.Printf("worker %d stopped", w.id)
 }
 
 func (w *Worker) process(
@@ -203,4 +194,44 @@ func (w *Worker) markFailed(
 	if err != nil {
 		log.Printf("failed updating delivery: %v", err)
 	}
+}
+
+// -------------------------
+// Worker Pool
+// -------------------------
+
+type WorkerPool struct {
+	queue   *Queue
+	db      *pgxpool.Pool
+	workers int
+	wg      sync.WaitGroup
+}
+
+func NewWorkerPool(
+	workers int,
+	queue *Queue,
+	db *pgxpool.Pool,
+) *WorkerPool {
+	return &WorkerPool{
+		workers: workers,
+		queue:   queue,
+		db:      db,
+	}
+}
+
+func (p *WorkerPool) Start() {
+	for i := 1; i <= p.workers; i++ {
+		p.wg.Add(1)
+
+		go func(id int) {
+			defer p.wg.Done()
+
+			worker := NewWorker(id, p.queue, p.db)
+			worker.Start()
+		}(i)
+	}
+}
+
+func (p *WorkerPool) Wait() {
+	p.wg.Wait()
 }
