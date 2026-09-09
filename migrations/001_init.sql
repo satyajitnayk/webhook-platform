@@ -25,6 +25,7 @@ CREATE TABLE deliveries (
     webhook_id UUID NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
     status TEXT NOT NULL,
     attempts INT NOT NULL DEFAULT 0,
+    next_retry_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -33,3 +34,6 @@ ON subscriptions(event_type);
 
 CREATE INDEX idx_deliveries_status
 ON deliveries(status);
+
+CREATE INDEX idx_deliveries_retry
+ON deliveries(status, next_retry_at);

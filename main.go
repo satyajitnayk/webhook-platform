@@ -35,6 +35,12 @@ func main() {
 
 	workerPool.Start()
 
+	go startRetryScheduler(
+		ctx,
+		db,
+		queue,
+	)
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {

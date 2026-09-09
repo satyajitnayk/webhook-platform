@@ -181,7 +181,7 @@ func (w *Worker) markSuccess(
 		ctx,
 		`
 		UPDATE deliveries
-		SET status = $1,
+		SET status = $1
 		WHERE id = $2
 		`,
 		DeliverySuccess,
@@ -228,7 +228,8 @@ func (w *Worker) handleFailure(
 			ctx,
 			`
 			UPDATE deliveries
-			SET status = $1
+			SET status = $1,
+			    next_retry_at = NULL
 			WHERE id = $2
 			`,
 			DeliveryFailed,
@@ -237,7 +238,7 @@ func (w *Worker) handleFailure(
 
 		if err != nil {
 			log.Printf(
-				"failed marking delivery=%s permanently failed: %v",
+				"failed marking delivery=%s failed: %v",
 				delivery.ID,
 				err,
 			)
@@ -246,14 +247,19 @@ func (w *Worker) handleFailure(
 		return
 	}
 
+	delay := retryDelay(delivery.Attempts)
+	nextRetryAt := time.Now().Add(delay)
+
 	_, err := w.db.Exec(
 		ctx,
 		`
 		UPDATE deliveries
-		SET status = $1
-		WHERE id = $2
+		SET status = $1,
+			  next_retry_at = $2
+		WHERE id = $3
 		`,
 		DeliveryPending,
+		nextRetryAt,
 		delivery.ID,
 	)
 
@@ -266,39 +272,12 @@ func (w *Worker) handleFailure(
 		return
 	}
 
-	delay := retryDelay(delivery.Attempts)
-
 	log.Printf(
-		"delivery=%s attempt=%d retry in %s",
+		"delivery=%s attempt=%d retry at=%s",
 		delivery.ID,
 		delivery.Attempts,
-		delay,
+		nextRetryAt.Format(time.RFC3339),
 	)
-
-	// retry
-	go func() {
-		timer := time.NewTimer(delay)
-		defer timer.Stop()
-
-		select {
-		case <-timer.C:
-			if !w.queue.Enqueue(
-				context.Background(),
-				delivery,
-			) {
-				log.Printf(
-					"retry cancelled during shutdown delivery=%s",
-					delivery.ID,
-				)
-			}
-
-		case <-w.queue.Done():
-			log.Printf(
-				"retry cancelled during shutdown delivery=%s",
-				delivery.ID,
-			)
-		}
-	}()
 
 }
 
@@ -306,6 +285,7 @@ func (w *Worker) claimDelivery(
 	ctx context.Context,
 	deliveryID string,
 ) (int, bool) {
+
 	var attempts int
 
 	// We use QueryRow instead of Exec because the 'RETURNING' clause acts like a SELECT.
@@ -321,7 +301,8 @@ func (w *Worker) claimDelivery(
 		UPDATE deliveries
 		SET
 			status = $1,
-			attempts = attempts + 1
+			attempts = attempts + 1,
+			next_retry_at = NULL
 		WHERE id = $2
 		  AND status = $3
 		RETURNING attempts
@@ -381,4 +362,76 @@ func (p *WorkerPool) Start() {
 
 func (p *WorkerPool) Wait() {
 	p.wg.Wait()
+}
+
+func startRetryScheduler(
+	ctx context.Context,
+	db *pgxpool.Pool,
+	queue *Queue,
+) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	log.Println("retry scheduler started")
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("retry scheduler stopped")
+			return
+
+		case <-ticker.C:
+			scheduleRetries(ctx, db, queue)
+		}
+	}
+}
+
+func scheduleRetries(
+	ctx context.Context,
+	db *pgxpool.Pool,
+	queue *Queue,
+) {
+	rows, err := db.Query(
+		ctx,
+		`
+		SELECT
+			id,
+			event_id,
+			webhook_id,
+			status,
+			attempts
+		FROM deliveries
+		WHERE status = $1
+		  AND attempts > 0
+		  AND next_retry_at <= NOW()
+		ORDER BY next_retry_at
+		LIMIT 100
+		`,
+		DeliveryPending,
+	)
+
+	if err != nil {
+		log.Printf("retry scheduler query failed: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var delivery Delivery
+
+		if err := rows.Scan(
+			&delivery.ID,
+			&delivery.EventID,
+			&delivery.WebhookID,
+			&delivery.Status,
+			&delivery.Attempts,
+		); err != nil {
+			log.Printf("retry scheduler scan failed: %v", err)
+			continue
+		}
+
+		if !queue.Enqueue(ctx, delivery) {
+			return
+		}
+	}
 }

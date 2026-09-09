@@ -22,12 +22,13 @@ type Subscription struct {
 }
 
 type Delivery struct {
-	ID        string    `json:"id"`
-	EventID   string    `json:"event_id"`
-	WebhookID string    `json:"webhook_id"`
-	Status    string    `json:"status"`
-	Attempts  int       `json:"attempts"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          string     `json:"id"`
+	EventID     string     `json:"event_id"`
+	WebhookID   string     `json:"webhook_id"`
+	Status      string     `json:"status"`
+	Attempts    int        `json:"attempts"`
+	NextRetryAt *time.Time `json:"next_retry_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 type CreateWebhookRequest struct {

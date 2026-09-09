@@ -99,7 +99,8 @@ func createEvent(
 		ctx,
 		`SELECT webhook_id
 		 FROM subscriptions
-		 WHERE event_type = $1`,
+		 WHERE event_type = $1
+		`,
 		req.Type,
 	)
 	if err != nil {
