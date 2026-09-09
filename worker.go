@@ -41,11 +41,16 @@ func NewWorker(
 func (w *Worker) Start() {
 	log.Printf("worker %d started", w.id)
 
-	for delivery := range w.queue.Jobs() {
-		w.process(context.Background(), delivery)
-	}
+	for {
+		select {
+		case <-w.queue.done:
+			log.Printf("worker %d stopped", w.id)
+			return
 
-	log.Printf("worker %d stopped", w.id)
+		case delivery := <-w.queue.Jobs():
+			w.process(context.Background(), delivery)
+		}
+	}
 }
 
 func (w *Worker) process(
@@ -272,9 +277,27 @@ func (w *Worker) handleFailure(
 
 	// retry
 	go func() {
-		time.Sleep(delay)
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
 
-		w.queue.Enqueue(delivery)
+		select {
+		case <-timer.C:
+			if !w.queue.Enqueue(
+				context.Background(),
+				delivery,
+			) {
+				log.Printf(
+					"retry cancelled during shutdown delivery=%s",
+					delivery.ID,
+				)
+			}
+
+		case <-w.queue.Done():
+			log.Printf(
+				"retry cancelled during shutdown delivery=%s",
+				delivery.ID,
+			)
+		}
 	}()
 
 }

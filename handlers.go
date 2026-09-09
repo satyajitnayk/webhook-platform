@@ -85,12 +85,19 @@ func createEventHandler(
 		for _, delivery := range deliveries {
 			deliveryIDs = append(deliveryIDs, delivery.ID)
 
-			queue.Enqueue(delivery)
+			if !queue.Enqueue(r.Context(), delivery) {
+				http.Error(
+					w,
+					"queue unavailable",
+					http.StatusServiceUnavailable,
+				)
+				return
+			}
 		}
 
 		response := map[string]any{
-			"event_id":   eventID,
-			"deliveries": deliveryCount,
+			"event_id":     eventID,
+			"deliveries":   deliveryCount,
 			"delivery_ids": deliveryIDs,
 		}
 
