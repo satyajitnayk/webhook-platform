@@ -30,6 +30,15 @@ func createWebhookHandler(db *pgxpool.Pool) http.HandlerFunc {
 
 		validateWebhookURL(req.URL)
 
+		if hasDuplicateEvents(req.Events) {
+			http.Error(
+				w,
+				"duplicate event type",
+				http.StatusBadRequest,
+			)
+			return
+		}
+
 		id, err := createWebhook(r.Context(), db, req)
 		if err != nil {
 			http.Error(w, "failed to create webhook", http.StatusInternalServerError)

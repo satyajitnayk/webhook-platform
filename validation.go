@@ -25,3 +25,17 @@ func validateWebhookURL(rawURL string) error {
 
 	return nil
 }
+
+func hasDuplicateEvents(events []string) bool {
+	seen := make(map[string]struct{})
+
+	for _, event := range events {
+		if _, exists := seen[event]; exists {
+			return true
+		}
+
+		seen[event] = struct{}{}
+	}
+
+	return false
+}
