@@ -344,3 +344,49 @@ func TestIsRetryableStatus(t *testing.T) {
 		}
 	}
 }
+
+func TestRetryDelay(t *testing.T) {
+	tests := []struct {
+		name         string
+		attempt      int
+		expectedBase time.Duration
+	}{
+		{name: "First attempt (1s base)", attempt: 1, expectedBase: 1 * time.Second},
+		{name: "Second attempt (2s base)", attempt: 2, expectedBase: 2 * time.Second},
+		{name: "Third attempt (4s base)", attempt: 3, expectedBase: 4 * time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			delay := retryDelay(tt.attempt)
+
+			// Calculate boundaries directly from the base value
+			minAllowed := tt.expectedBase
+			maxAllowed := tt.expectedBase + time.Duration(float64(tt.expectedBase)*0.25)
+
+			if delay < minAllowed || delay > maxAllowed {
+				t.Fatalf(
+					"Attempt %d out of bounds:\n  Got:      %v\n  Expected: %v to %v",
+					tt.attempt, delay, minAllowed, maxAllowed,
+				)
+			}
+		})
+	}
+}
+
+func TestRetryDelayHasJitter(t *testing.T) {
+	first := retryDelay(1)
+
+	different := false
+
+	for range 20 {
+		if retryDelay(1) != first {
+			different = true
+			break
+		}
+	}
+
+	if !different {
+		t.Fatal("expected retry delay to include jitter")
+	}
+}

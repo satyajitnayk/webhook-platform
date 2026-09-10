@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"math/rand"
 	"net/http"
 	"sync"
 	"time"
@@ -12,8 +13,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func retryDelay(attempt int) time.Duration {
-	return time.Second * time.Duration(1<<(attempt-1))
+func retryDelay(attempts int) time.Duration {
+	base := time.Second * time.Duration(1<<(attempts-1))
+	// random 0–25% jitter
+	jitter := time.Duration(rand.Float64() * float64(base) * 0.25)
+
+	return base + jitter
 }
 
 type Worker struct {
