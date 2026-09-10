@@ -28,6 +28,7 @@ type Delivery struct {
 	Status      string     `json:"status"`
 	Attempts    int        `json:"attempts"`
 	NextRetryAt *time.Time `json:"next_retry_at,omitempty"`
+	LeaseUntil  *time.Time `json:"lease_until,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
@@ -48,4 +49,6 @@ const (
 	DeliveryFailed     = "failed"
 
 	MaxAttempts = 4
+
+	DeliveryLease = 30 * time.Second
 )

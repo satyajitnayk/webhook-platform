@@ -26,6 +26,7 @@ CREATE TABLE deliveries (
     status TEXT NOT NULL,
     attempts INT NOT NULL DEFAULT 0,
     next_retry_at TIMESTAMPTZ,
+    lease_until TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -37,3 +38,6 @@ ON deliveries(status);
 
 CREATE INDEX idx_deliveries_retry
 ON deliveries(status, next_retry_at);
+
+CREATE INDEX idx_deliveries_lease
+ON deliveries(status, lease_until);

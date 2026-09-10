@@ -181,11 +181,14 @@ func (w *Worker) markSuccess(
 		ctx,
 		`
 		UPDATE deliveries
-		SET status = $1
+		SET status = $1,
+				lease_until = NULL
 		WHERE id = $2
+			AND status = $3
 		`,
 		DeliverySuccess,
 		deliveryID,
+		DeliveryProcessing,
 	)
 
 	if err != nil {
@@ -229,7 +232,8 @@ func (w *Worker) handleFailure(
 			`
 			UPDATE deliveries
 			SET status = $1,
-			    next_retry_at = NULL
+			    next_retry_at = NULL,
+					lease_until = NULL
 			WHERE id = $2
 			`,
 			DeliveryFailed,
@@ -255,12 +259,15 @@ func (w *Worker) handleFailure(
 		`
 		UPDATE deliveries
 		SET status = $1,
-			  next_retry_at = $2
+			  next_retry_at = $2,
+				lease_until = NULL
 		WHERE id = $3
+			AND status = $4
 		`,
 		DeliveryPending,
 		nextRetryAt,
 		delivery.ID,
+		DeliveryProcessing,
 	)
 
 	if err != nil {
@@ -302,7 +309,8 @@ func (w *Worker) claimDelivery(
 		SET
 			status = $1,
 			attempts = attempts + 1,
-			next_retry_at = NULL
+			next_retry_at = NULL,
+			lease_until = NOW() + INTERVAL '30 seconds'
 		WHERE id = $2
 		  AND status = $3
 		RETURNING attempts
@@ -381,6 +389,7 @@ func startRetryScheduler(
 			return
 
 		case <-ticker.C:
+			recoverStuckDeliveries(ctx, db)
 			scheduleRetries(ctx, db, queue)
 		}
 	}
@@ -433,5 +442,41 @@ func scheduleRetries(
 		if !queue.Enqueue(ctx, delivery) {
 			return
 		}
+	}
+}
+
+func recoverStuckDeliveries(
+	ctx context.Context,
+	db *pgxpool.Pool,
+) {
+
+	result, err := db.Exec(
+		ctx,
+		`
+		UPDATE deliveries
+		SET 
+				status = $1,
+				next_retry_at = NOW(),
+				lease_until = NULL	
+		WHERE status = $2
+		  AND lease_until <= NOW()
+		`,
+		DeliveryPending,
+		DeliveryProcessing,
+	)
+
+	if err != nil {
+		log.Printf(
+			"failed recovering stuck deliveries: %v",
+			err,
+		)
+		return
+	}
+
+	if result.RowsAffected() > 0 {
+		log.Printf(
+			"recovered %d stuck deliveries",
+			result.RowsAffected(),
+		)
 	}
 }
