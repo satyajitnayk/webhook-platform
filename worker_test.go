@@ -81,12 +81,8 @@ func createTestDelivery(
 func TestClaimDeliveryOnlyOneWorkerWins(t *testing.T) {
 	ctx := context.Background()
 
-	// Use your test database connection here.
-	db, err := connectTestDB(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	// Uses setupTest to guarantee a blank canvas for the race conditions test
+	db := setupTest(t)
 
 	deliveryID := createTestDelivery(t, ctx, db)
 
@@ -140,16 +136,12 @@ func TestClaimDeliveryOnlyOneWorkerWins(t *testing.T) {
 func TestRecoverStuckDelivery(t *testing.T) {
 	ctx := context.Background()
 
-	db, err := connectTestDB(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := setupTest(t)
 
 	deliveryID := createTestDelivery(t, ctx, db)
 
 	// Simulate a worker that claimed the delivery.
-	_, err = db.Exec(
+	_, err := db.Exec(
 		ctx,
 		`
 		UPDATE deliveries
@@ -191,15 +183,11 @@ func TestRecoverStuckDelivery(t *testing.T) {
 func TestActiveDeliveryIsNotRecovered(t *testing.T) {
 	ctx := context.Background()
 
-	db, err := connectTestDB(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := setupTest(t)
 
 	deliveryID := createTestDelivery(t, ctx, db)
 
-	_, err = db.Exec(
+	_, err := db.Exec(
 		ctx,
 		`
 		UPDATE deliveries
@@ -242,17 +230,13 @@ func TestActiveDeliveryIsNotRecovered(t *testing.T) {
 func TestRetryStateIsDurable(t *testing.T) {
 	ctx := context.Background()
 
-	db, err := connectTestDB(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := setupTest(t)
 
 	deliveryID := createTestDelivery(t, ctx, db)
 
 	nextRetry := time.Now().Add(10 * time.Second)
 
-	_, err = db.Exec(
+	_, err := db.Exec(
 		ctx,
 		`
 		UPDATE deliveries
@@ -270,9 +254,10 @@ func TestRetryStateIsDurable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Simulate application restart by closing/reopening DB.
+	// Stays durable since we intentionally simulate an application exit lifecycle here
 	db.Close()
 
+	// Reopen the fresh pool hook using the structural connector directly
 	db, err = connectTestDB(ctx)
 	if err != nil {
 		t.Fatal(err)
