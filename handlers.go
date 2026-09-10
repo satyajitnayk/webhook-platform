@@ -85,10 +85,10 @@ func createEventHandler(
 		for _, delivery := range deliveries {
 			deliveryIDs = append(deliveryIDs, delivery.ID)
 
-			if !queue.Enqueue(r.Context(), delivery) {
+			if !queue.TryEnqueue(delivery) {
 				http.Error(
 					w,
-					"queue unavailable",
+					"delivery queue is full",
 					http.StatusServiceUnavailable,
 				)
 				return

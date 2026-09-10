@@ -47,3 +47,14 @@ func (q *Queue) Close() {
 		close(q.done)
 	})
 }
+
+func (q *Queue) TryEnqueue(delivery Delivery) bool {
+	select {
+	case <-q.done:
+		return false
+	case q.jobs <- delivery:
+		return true
+	default:
+		return false
+	}
+}
