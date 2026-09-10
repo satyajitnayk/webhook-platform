@@ -34,6 +34,10 @@ func NewWorker(
 		db:    db,
 		client: &http.Client{
 			Timeout: 5 * time.Second,
+			// This lets worker actually see 301, 302, etc. instead of silently following them.
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
 		},
 	}
 }
@@ -138,6 +142,7 @@ func (w *Worker) process(
 
 	resp, err := w.client.Do(req)
 	if err != nil {
+		// Network errors and timeouts are retryable.
 		log.Printf(
 			"worker=%d delivery=%s failed: %v",
 			w.id,
@@ -147,10 +152,9 @@ func (w *Worker) process(
 		w.handleFailure(ctx, delivery)
 		return
 	}
-
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
 		w.markSuccess(ctx, delivery.ID)
 
 		log.Printf(
@@ -163,7 +167,11 @@ func (w *Worker) process(
 		return
 	}
 
-	w.handleFailure(ctx, delivery)
+	if isRetryableStatus(resp.StatusCode) {
+		// 5xx → retry
+		w.handleFailure(ctx, delivery)
+		return
+	}
 
 	log.Printf(
 		"worker=%d delivery=%s failed status=%d",
@@ -171,6 +179,9 @@ func (w *Worker) process(
 		delivery.ID,
 		resp.StatusCode,
 	)
+
+	// 3xx and 4xx → permanent failure.
+	w.markPermanentFailure(ctx, delivery.ID)
 }
 
 func (w *Worker) markSuccess(
@@ -332,6 +343,31 @@ func (w *Worker) claimDelivery(
 	return attempts, true
 }
 
+func (w *Worker) markPermanentFailure(
+	ctx context.Context,
+	deliveryID string,
+) {
+
+	_, err := w.db.Exec(
+		ctx,
+		`
+		UPDATE deliveries
+		SET status = $1,
+		    next_retry_at = NULL,
+		    lease_until = NULL
+		WHERE id = $2
+		  AND status = $3
+	`,
+		DeliveryFailed,
+		deliveryID,
+		DeliveryProcessing,
+	)
+
+	if err != nil {
+		log.Printf("mark permanent failure delivery=%s: %v", deliveryID, err)
+	}
+}
+
 // -------------------------
 // Worker Pool
 // -------------------------
@@ -479,4 +515,8 @@ func recoverStuckDeliveries(
 			result.RowsAffected(),
 		)
 	}
+}
+
+func isRetryableStatus(statusCode int) bool {
+	return statusCode >= 500 && statusCode <= 599
 }

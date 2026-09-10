@@ -312,3 +312,35 @@ func TestRetryStateIsDurable(t *testing.T) {
 		t.Fatal("expected next_retry_at to survive restart")
 	}
 }
+
+func TestIsRetryableStatus(t *testing.T) {
+	tests := []struct {
+		status    int
+		retryable bool
+	}{
+		{200, false},
+		{201, false},
+		{301, false},
+		{302, false},
+		{400, false},
+		{401, false},
+		{404, false},
+		{500, true},
+		{502, true},
+		{503, true},
+		{599, true},
+	}
+
+	for _, tt := range tests {
+		got := isRetryableStatus(tt.status)
+
+		if got != tt.retryable {
+			t.Fatalf(
+				"status=%d got=%v want=%v",
+				tt.status,
+				got,
+				tt.retryable,
+			)
+		}
+	}
+}
