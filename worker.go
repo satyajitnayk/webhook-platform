@@ -452,9 +452,16 @@ func scheduleRetries(
 			attempts
 		FROM deliveries
 		WHERE status = $1
-		  AND attempts > 0
-		  AND next_retry_at <= NOW()
-		ORDER BY next_retry_at
+		  AND (
+			(attempts > 0 AND next_retry_at <= NOW())
+			OR
+			(attempts = 0 AND next_retry_at IS NULL)
+			)
+		ORDER BY
+			CASE
+				WHEN next_retry_at IS NULL THEN created_at
+				ELSE next_retry_at
+			END
 		LIMIT 100
 		`,
 		DeliveryPending,

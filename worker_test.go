@@ -383,3 +383,177 @@ func TestRetryDelayHasJitter(t *testing.T) {
 		t.Fatal("expected retry delay to include jitter")
 	}
 }
+
+func TestScheduleRetries_NewPendingDelivery(t *testing.T) {
+
+	ctx := context.Background()
+	db := setupTest(t)
+	q := NewQueue(10)
+	defer q.Close()
+
+	// Create webhook.
+	_, err := createWebhook(ctx, db, CreateWebhookRequest{
+		URL:    "http://example.com/webhook",
+		Events: []string{"order.created"},
+	})
+	if err != nil {
+		t.Fatalf("create webhook: %v", err)
+	}
+
+	// Create event.
+	_, _, deliveries, err := createEvent(ctx, db, CreateEventRequest{
+		Type:    "order.created",
+		Payload: map[string]any{"order_id": "123"},
+	})
+	if err != nil {
+		t.Fatalf("create event: %v", err)
+	}
+
+	if len(deliveries) != 1 {
+		t.Fatalf("expected 1 delivery, got %d", len(deliveries))
+	}
+
+	deliveryID := deliveries[0].ID
+
+	// Make sure this represents a brand-new pending delivery.
+	_, err = db.Exec(ctx, `
+		UPDATE deliveries
+		SET status = 'pending',
+		    attempts = 0,
+		    next_retry_at = NULL,
+		    lease_until = NULL
+		WHERE id = $1
+	`, deliveryID)
+	if err != nil {
+		t.Fatalf("reset delivery: %v", err)
+	}
+
+	// Run scheduler once.
+	scheduleRetries(ctx, db, q)
+
+	// It should now be in the queue.
+	select {
+	case got := <-q.Jobs():
+		if got.ID != deliveryID {
+			t.Fatalf(
+				"expected delivery %s, got %s",
+				deliveryID,
+				got.ID,
+			)
+		}
+
+	default:
+		t.Fatal("expected new pending delivery to be queued")
+	}
+}
+
+func TestScheduleRetries_DoesNotScheduleFutureRetry(t *testing.T) {
+
+	ctx := context.Background()
+	db := setupTest(t)
+	q := NewQueue(10)
+	defer q.Close()
+
+	_, err := createWebhook(ctx, db, CreateWebhookRequest{
+		URL:    "http://example.com/webhook",
+		Events: []string{"order.created"},
+	})
+	if err != nil {
+		t.Fatalf("create webhook: %v", err)
+	}
+
+	_, _, deliveries, err := createEvent(ctx, db, CreateEventRequest{
+		Type:    "order.created",
+		Payload: map[string]any{"order_id": "123"},
+	})
+	if err != nil {
+		t.Fatalf("create event: %v", err)
+	}
+
+	if len(deliveries) != 1 {
+		t.Fatalf("expected 1 delivery, got %d", len(deliveries))
+	}
+
+	deliveryID := deliveries[0].ID
+
+	// Simulate a failed attempt waiting for its retry time.
+	_, err = db.Exec(ctx, `
+		UPDATE deliveries
+		SET status = 'pending',
+		    attempts = 1,
+		    next_retry_at = NOW() + INTERVAL '10 seconds',
+		    lease_until = NULL
+		WHERE id = $1
+	`, deliveryID)
+	if err != nil {
+		t.Fatalf("update delivery: %v", err)
+	}
+
+	scheduleRetries(ctx, db, q)
+
+	select {
+	case got := <-q.Jobs():
+		t.Fatalf(
+			"delivery %s should not have been queued, but was",
+			got.ID,
+		)
+
+	default:
+		// Expected.
+	}
+}
+
+func TestScheduleRetries_DueRetry(t *testing.T) {
+
+	ctx := context.Background()
+	db := setupTest(t)
+	q := NewQueue(10)
+	defer q.Close()
+
+	_, err := createWebhook(ctx, db, CreateWebhookRequest{
+		URL:    "http://example.com/webhook",
+		Events: []string{"order.created"},
+	})
+	if err != nil {
+		t.Fatalf("create webhook: %v", err)
+	}
+
+	_, _, deliveries, err := createEvent(ctx, db, CreateEventRequest{
+		Type:    "order.created",
+		Payload: map[string]any{"order_id": "123"},
+	})
+	if err != nil {
+		t.Fatalf("create event: %v", err)
+	}
+
+	deliveryID := deliveries[0].ID
+
+	// Simulate a failed delivery whose retry time has arrived.
+	_, err = db.Exec(ctx, `
+		UPDATE deliveries
+		SET status = 'pending',
+		    attempts = 1,
+		    next_retry_at = NOW() - INTERVAL '1 second',
+		    lease_until = NULL
+		WHERE id = $1
+	`, deliveryID)
+	if err != nil {
+		t.Fatalf("update delivery: %v", err)
+	}
+
+	scheduleRetries(ctx, db, q)
+
+	select {
+	case got := <-q.Jobs():
+		if got.ID != deliveryID {
+			t.Fatalf(
+				"expected delivery %s, got %s",
+				deliveryID,
+				got.ID,
+			)
+		}
+
+	default:
+		t.Fatal("expected due retry to be queued")
+	}
+}
