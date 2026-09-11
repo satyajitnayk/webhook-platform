@@ -230,13 +230,20 @@ func TestActiveDeliveryIsNotRecovered(t *testing.T) {
 func TestRetryStateIsDurable(t *testing.T) {
 	ctx := context.Background()
 
-	db := setupTest(t)
+	setupTest(t)
+
+	// Separate pool so we can close/reopen it without
+	// affecting the shared testDB.
+	db, err := connectTestDB(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	deliveryID := createTestDelivery(t, ctx, db)
 
 	nextRetry := time.Now().Add(10 * time.Second)
 
-	_, err := db.Exec(
+	_, err = db.Exec(
 		ctx,
 		`
 		UPDATE deliveries
@@ -251,13 +258,14 @@ func TestRetryStateIsDurable(t *testing.T) {
 	)
 
 	if err != nil {
+		db.Close()
 		t.Fatal(err)
 	}
 
-	// Stays durable since we intentionally simulate an application exit lifecycle here
+	// Simulate application restart.
 	db.Close()
 
-	// Reopen the fresh pool hook using the structural connector directly
+	// Reopen a new pool.
 	db, err = connectTestDB(ctx)
 	if err != nil {
 		t.Fatal(err)
