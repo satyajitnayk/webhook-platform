@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"log"
 	"math/rand"
@@ -49,7 +48,7 @@ func NewWorker(
 	}
 }
 
-func (w *Worker) Start() {
+func (w *Worker) Start(ctx context.Context) {
 	log.Printf("worker %d started", w.id)
 
 	for {
@@ -59,7 +58,7 @@ func (w *Worker) Start() {
 			return
 
 		case delivery := <-w.queue.Jobs():
-			w.process(context.Background(), delivery)
+			w.process(ctx, delivery)
 		}
 	}
 }
@@ -159,17 +158,13 @@ func (w *Worker) process(
 		w.handleFailure(ctx, delivery)
 		return
 	}
+	defer resp.Body.Close()
 
 	const maxResponseBody = 4 * 1024 // 4 KB
 	// Prevent DoS: Read max 4KB to reuse the connection. If the payload is larger,
 	// Go avoids a dangerous background drain and kills the TCP socket instantly,
 	// protecting the worker pool from infinite stream memory leaks.
-	_, err = io.CopyN(io.Discard, resp.Body, maxResponseBody)
-	if err != nil && !errors.Is(err, io.EOF) {
-		// optional logging
-	}
-
-	defer resp.Body.Close()
+	io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBody))
 
 	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
 		w.markSuccess(ctx, delivery.ID)
@@ -408,7 +403,7 @@ func NewWorkerPool(
 	}
 }
 
-func (p *WorkerPool) Start() {
+func (p *WorkerPool) Start(ctx context.Context) {
 	for i := 1; i <= p.workers; i++ {
 		p.wg.Add(1)
 
@@ -416,7 +411,7 @@ func (p *WorkerPool) Start() {
 			defer p.wg.Done()
 
 			worker := NewWorker(id, p.queue, p.db)
-			worker.Start()
+			worker.Start(ctx)
 		}(i)
 	}
 }

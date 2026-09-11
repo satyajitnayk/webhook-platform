@@ -11,6 +11,9 @@ import (
 
 func createWebhookHandler(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+
+		r.Body = http.MaxBytesReader(w, r.Body, 64<<10) // 64 KB
+
 		var req CreateWebhookRequest
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -61,6 +64,8 @@ func createEventHandler(
 	queue *Queue,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// restrict request body to 1MB
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
 
 		var req CreateEventRequest
 

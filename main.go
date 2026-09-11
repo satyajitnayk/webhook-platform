@@ -33,7 +33,7 @@ func main() {
 		db,
 	)
 
-	workerPool.Start()
+	workerPool.Start(ctx)
 
 	go startRetryScheduler(
 		ctx,
