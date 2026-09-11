@@ -49,11 +49,21 @@ func (q *Queue) Close() {
 }
 
 func (q *Queue) TryEnqueue(delivery Delivery) bool {
+	// Pre-check closure to avoid sending on a closed channel.
 	select {
 	case <-q.done:
 		return false
+
+	default:
+	}
+
+	select {
+	case <-q.done:
+		return false
+
 	case q.jobs <- delivery:
 		return true
+
 	default:
 		return false
 	}
