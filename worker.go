@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -157,6 +159,16 @@ func (w *Worker) process(
 		w.handleFailure(ctx, delivery)
 		return
 	}
+
+	const maxResponseBody = 4 * 1024 // 4 KB
+	// Prevent DoS: Read max 4KB to reuse the connection. If the payload is larger,
+	// Go avoids a dangerous background drain and kills the TCP socket instantly,
+	// protecting the worker pool from infinite stream memory leaks.
+	_, err = io.CopyN(io.Discard, resp.Body, maxResponseBody)
+	if err != nil && !errors.Is(err, io.EOF) {
+		// optional logging
+	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
