@@ -10,10 +10,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
+	godotenv.Load()
+
 	initMetrics()
 
 	ctx, stop := signal.NotifyContext(
@@ -52,19 +55,19 @@ func main() {
 		w.Write([]byte("ok"))
 	})
 
-	mux.HandleFunc(
+	mux.Handle(
 		"POST /webhooks",
-		createWebhookHandler(db),
+		authMiddleware(http.HandlerFunc(createWebhookHandler(db))),
 	)
 
-	mux.HandleFunc(
+	mux.Handle(
 		"POST /events",
-		createEventHandler(db, queue),
+		authMiddleware(http.HandlerFunc(createEventHandler(db, queue))),
 	)
 
-	mux.HandleFunc(
+	mux.Handle(
 		"GET /deliveries/{id}",
-		getDeliveryHandler(db),
+		authMiddleware(http.HandlerFunc(getDeliveryHandler(db))),
 	)
 
 	mux.Handle("/metrics", promhttp.Handler())
