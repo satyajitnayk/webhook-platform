@@ -62,6 +62,7 @@ func (q *Queue) TryEnqueue(delivery Delivery) bool {
 		return false
 
 	case q.jobs <- delivery:
+		queueSize.Inc()
 		return true
 
 	default:

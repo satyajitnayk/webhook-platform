@@ -58,6 +58,7 @@ func (w *Worker) Start(ctx context.Context) {
 			return
 
 		case delivery := <-w.queue.Jobs():
+			queueSize.Dec()
 			w.process(ctx, delivery)
 		}
 	}
@@ -72,6 +73,8 @@ func (w *Worker) process(
 	if !ok {
 		return
 	}
+
+	deliveryAttempts.Inc()
 
 	delivery.Attempts = attempts
 
@@ -146,10 +149,17 @@ func (w *Worker) process(
 
 	req.Header.Set("Content-Type", "application/json")
 
+	start := time.Now()
+
 	resp, err := w.client.Do(req)
+
+	deliveryDuration.Observe(float64(time.Since(start).Seconds()))
+
 	if err != nil {
 		// Network errors and timeouts are retryable.
 		w.handleFailure(ctx, delivery)
+
+		deliveryResults.WithLabelValues("retry").Inc()
 
 		logDelivery(
 			delivery,
@@ -172,6 +182,8 @@ func (w *Worker) process(
 	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
 		w.markSuccess(ctx, delivery.ID)
 
+		deliveryResults.WithLabelValues("success").Inc()
+
 		logDelivery(
 			delivery,
 			attempts,
@@ -187,6 +199,8 @@ func (w *Worker) process(
 		// 5xx → retry
 		w.handleFailure(ctx, delivery)
 
+		deliveryResults.WithLabelValues("retry").Inc()
+
 		logDelivery(
 			delivery,
 			attempts,
@@ -200,6 +214,8 @@ func (w *Worker) process(
 
 	// 3xx and 4xx → permanent failure.
 	w.markPermanentFailure(ctx, delivery.ID)
+
+	deliveryResults.WithLabelValues("failed").Inc()
 
 	logDelivery(
 		delivery,
