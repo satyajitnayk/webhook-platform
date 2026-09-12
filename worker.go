@@ -40,6 +40,9 @@ func NewWorker(
 		db:    db,
 		client: &http.Client{
 			Timeout: 5 * time.Second,
+
+			Transport: ssrfSafeTransport(netResolver{}),
+
 			// This lets worker actually see 301, 302, etc. instead of silently following them.
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				return http.ErrUseLastResponse
