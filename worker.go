@@ -539,7 +539,7 @@ func scheduleRetries(
 			continue
 		}
 
-		if !queue.Enqueue(ctx, delivery) {
+		if !queue.TryEnqueue(delivery) {
 			return
 		}
 	}
