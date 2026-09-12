@@ -2,7 +2,9 @@ package main
 
 import (
 	"errors"
+	"net"
 	"net/url"
+	"strings"
 )
 
 func validateWebhookURL(rawURL string) error {
@@ -23,7 +25,26 @@ func validateWebhookURL(rawURL string) error {
 		return errors.New("URL must have a host")
 	}
 
+	hostname := strings.ToLower(u.Hostname())
+
+	if hostname == "localhost" {
+		return errors.New("localhost is not allowed")
+	}
+
+	// If the hostname is already an IP address,
+	// reject private/reserved addresses.
+	if ip := net.ParseIP(hostname); ip != nil && isBlockedIP(ip) {
+		return errors.New("private or reserved IP address is not allowed")
+	}
+
 	return nil
+}
+
+func isBlockedIP(ip net.IP) bool {
+	return ip.IsLoopback() ||
+		ip.IsPrivate() ||
+		ip.IsLinkLocalUnicast() ||
+		ip.IsUnspecified()
 }
 
 func hasDuplicateEvents(events []string) bool {
