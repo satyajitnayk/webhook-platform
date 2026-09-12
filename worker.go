@@ -149,13 +149,16 @@ func (w *Worker) process(
 	resp, err := w.client.Do(req)
 	if err != nil {
 		// Network errors and timeouts are retryable.
-		log.Printf(
-			"worker=%d delivery=%s failed: %v",
-			w.id,
-			delivery.ID,
+		w.handleFailure(ctx, delivery)
+
+		logDelivery(
+			delivery,
+			attempts,
+			"retry",
+			"error",
 			err,
 		)
-		w.handleFailure(ctx, delivery)
+
 		return
 	}
 	defer resp.Body.Close()
@@ -169,10 +172,11 @@ func (w *Worker) process(
 	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
 		w.markSuccess(ctx, delivery.ID)
 
-		log.Printf(
-			"worker=%d delivery=%s succeeded status=%d",
-			w.id,
-			delivery.ID,
+		logDelivery(
+			delivery,
+			attempts,
+			"success",
+			"status_code",
 			resp.StatusCode,
 		)
 
@@ -182,18 +186,28 @@ func (w *Worker) process(
 	if isRetryableStatus(resp.StatusCode) {
 		// 5xx → retry
 		w.handleFailure(ctx, delivery)
+
+		logDelivery(
+			delivery,
+			attempts,
+			"retry",
+			"status_code",
+			resp.StatusCode,
+		)
+
 		return
 	}
 
-	log.Printf(
-		"worker=%d delivery=%s failed status=%d",
-		w.id,
-		delivery.ID,
-		resp.StatusCode,
-	)
-
 	// 3xx and 4xx → permanent failure.
 	w.markPermanentFailure(ctx, delivery.ID)
+
+	logDelivery(
+		delivery,
+		attempts,
+		"failed",
+		"status_code",
+		resp.StatusCode,
+	)
 }
 
 func (w *Worker) markSuccess(
@@ -530,7 +544,7 @@ func recoverStuckDeliveries(
 
 	if result.RowsAffected() > 0 {
 		log.Printf(
-			"recovered %d stuck deliveries",
+			"action=lease_recovery recovered=%d",
 			result.RowsAffected(),
 		)
 	}
