@@ -3,8 +3,10 @@ package main
 import "time"
 
 type Webhook struct {
-	ID        string    `json:"id"`
-	URL       string    `json:"url"`
+	ID  string `json:"id"`
+	URL string `json:"url"`
+	//json:"-" prevents the secret from accidentally appearing in JSON responses.
+	Secret    string    `json:"-"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -40,6 +42,11 @@ type CreateWebhookRequest struct {
 type CreateEventRequest struct {
 	Type    string         `json:"type"`
 	Payload map[string]any `json:"payload"`
+}
+
+type CreateWebhookResponse struct {
+	ID     string `json:"id"`
+	Secret string `json:"secret"`
 }
 
 const (

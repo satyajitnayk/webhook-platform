@@ -1,6 +1,7 @@
 CREATE TABLE webhooks (
     id UUID PRIMARY KEY,
     url TEXT NOT NULL,
+    secret TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

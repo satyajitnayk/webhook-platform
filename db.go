@@ -28,24 +28,30 @@ func createWebhook(
 	ctx context.Context,
 	db *pgxpool.Pool,
 	req CreateWebhookRequest,
-) (string, error) {
+) (string, string, error) {
 	tx, err := db.Begin(ctx)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer tx.Rollback(ctx)
 
 	webhookID := uuid.New()
 
+	secret, err := generateWebhookSecret()
+	if err != nil {
+		return "", "", err
+	}
+
 	_, err = tx.Exec(
 		ctx,
-		`INSERT INTO webhooks (id, url)
-		 VALUES ($1, $2)`,
+		`INSERT INTO webhooks (id, url, secret)
+		 VALUES ($1, $2, $3)`,
 		webhookID,
 		req.URL,
+		secret,
 	)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	for _, eventType := range req.Events {
@@ -58,15 +64,15 @@ func createWebhook(
 			eventType,
 		)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return webhookID.String(), nil
+	return webhookID.String(), secret, nil
 }
 
 func createEvent(

@@ -43,13 +43,19 @@ func createTestDelivery(
 	// Create webhook.
 	webhookID := uuid.New()
 
+	secret, err := generateWebhookSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	_, err = db.Exec(
 		ctx,
 		`
-		INSERT INTO webhooks (id, url)
-		VALUES ($1, 'http://localhost:9000/webhook')
+		INSERT INTO webhooks (id, url, secret)
+		VALUES ($1, 'http://localhost:9000/webhook', $2)
 		`,
 		webhookID,
+		secret,
 	)
 
 	if err != nil {
@@ -392,7 +398,7 @@ func TestScheduleRetries_NewPendingDelivery(t *testing.T) {
 	defer q.Close()
 
 	// Create webhook.
-	_, err := createWebhook(ctx, db, CreateWebhookRequest{
+	_, _, err := createWebhook(ctx, db, CreateWebhookRequest{
 		URL:    "http://example.com/webhook",
 		Events: []string{"order.created"},
 	})
@@ -454,7 +460,7 @@ func TestScheduleRetries_DoesNotScheduleFutureRetry(t *testing.T) {
 	q := NewQueue(10)
 	defer q.Close()
 
-	_, err := createWebhook(ctx, db, CreateWebhookRequest{
+	_, _, err := createWebhook(ctx, db, CreateWebhookRequest{
 		URL:    "http://example.com/webhook",
 		Events: []string{"order.created"},
 	})
@@ -510,7 +516,7 @@ func TestScheduleRetries_DueRetry(t *testing.T) {
 	q := NewQueue(10)
 	defer q.Close()
 
-	_, err := createWebhook(ctx, db, CreateWebhookRequest{
+	_, _, err := createWebhook(ctx, db, CreateWebhookRequest{
 		URL:    "http://example.com/webhook",
 		Events: []string{"order.created"},
 	})

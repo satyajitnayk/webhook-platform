@@ -86,6 +86,7 @@ func (w *Worker) process(
 
 	var (
 		webhookURL string
+		secret     string
 		eventType  string
 		payload    []byte
 	)
@@ -95,6 +96,7 @@ func (w *Worker) process(
 		`
 		SELECT
 			w.url,
+			w.secret,
 			e.event_type,
 			e.payload
 		FROM deliveries d
@@ -105,6 +107,7 @@ func (w *Worker) process(
 		delivery.ID,
 	).Scan(
 		&webhookURL,
+		&secret,
 		&eventType,
 		&payload,
 	)
@@ -147,7 +150,16 @@ func (w *Worker) process(
 		return
 	}
 
+	signature := generateWebhookSignature(
+		secret,
+		bodyBytes,
+	)
+
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(
+		"X-Webhook-Signature",
+		"sha256="+signature,
+	)
 
 	start := time.Now()
 

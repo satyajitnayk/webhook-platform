@@ -42,20 +42,19 @@ func createWebhookHandler(db *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		id, err := createWebhook(r.Context(), db, req)
+		webhookID, secret, err := createWebhook(r.Context(), db, req)
 		if err != nil {
 			http.Error(w, "failed to create webhook", http.StatusInternalServerError)
 			return
 		}
 
-		response := map[string]string{
-			"id": id,
-		}
-
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 
-		json.NewEncoder(w).Encode(response)
+		json.NewEncoder(w).Encode(CreateWebhookResponse{
+			ID:     webhookID,
+			Secret: secret,
+		})
 	}
 }
 
