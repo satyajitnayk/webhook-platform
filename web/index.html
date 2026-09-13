@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Webhook Delivery Platform</title>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <header class="topbar">
+    <div>
+      <h1>Webhook Delivery Platform</h1>
+      <p>Webhook subscriptions and delivery monitoring</p>
+    </div>
+
+    <div class="api-key">
+      <input id="apiKey" type="password" placeholder="API key">
+      <button id="saveApiKey">Connect</button>
+    </div>
+  </header>
+
+
+  <main class="container">
+
+    <div id="error" class="error hidden"></div>
+    <div id="success" class="success hidden"></div>
+
+
+    <!-- Dashboard -->
+
+    <section class="stats">
+
+      <div class="stat-card">
+        <span>Webhooks</span>
+        <strong id="webhookCount">-</strong>
+      </div>
+
+      <div class="stat-card">
+        <span>Deliveries</span>
+        <strong id="deliveryCount">-</strong>
+      </div>
+
+      <div class="stat-card">
+        <span>Successful</span>
+        <strong id="successCount">-</strong>
+      </div>
+
+      <div class="stat-card">
+        <span>Failed</span>
+        <strong id="failedCount">-</strong>
+      </div>
+
+      <div class="stat-card">
+        <span>Pending</span>
+        <strong id="pendingCount">-</strong>
+      </div>
+
+    </section>
+
+
+    <!-- Create webhook -->
+
+    <section class="panel">
+
+      <div class="panel-header">
+        <div>
+          <h2>Create Webhook</h2>
+          <p>Register a destination for webhook events.</p>
+        </div>
+      </div>
+
+      <form id="webhookForm">
+
+        <div class="form-row">
+
+          <div class="form-group">
+            <label for="webhookUrl">Webhook URL</label>
+
+            <input id="webhookUrl" type="url" placeholder="https://example.com/webhook" required>
+          </div>
+
+          <div class="form-group">
+            <label for="eventTypes">
+              Event Types
+            </label>
+
+            <input id="eventTypes" type="text" placeholder="order.created, order.updated" required>
+          </div>
+
+          <div class="form-action">
+            <button type="submit">
+              Create Webhook
+            </button>
+          </div>
+
+        </div>
+
+      </form>
+
+    </section>
+
+
+    <!-- Webhooks -->
+
+    <section class="panel">
+
+      <div class="panel-header">
+        <div>
+          <h2>Webhooks</h2>
+          <p>Registered webhook destinations.</p>
+        </div>
+
+        <button id="refreshWebhooks" class="secondary">
+          Refresh
+        </button>
+      </div>
+
+      <div class="table-wrapper">
+
+        <table>
+
+          <thead>
+            <tr>
+              <th>URL</th>
+              <th>Created</th>
+              <th>ID</th>
+            </tr>
+          </thead>
+
+          <tbody id="webhooksTable">
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </section>
+
+
+    <!-- Webhook details -->
+
+    <section id="webhookDetails" class="panel hidden">
+
+      <div class="panel-header">
+
+        <div>
+          <h2>Webhook Details</h2>
+          <p id="detailWebhookId"></p>
+        </div>
+
+        <button id="closeDetails" class="secondary">
+          Close
+        </button>
+
+      </div>
+
+      <div class="detail-grid">
+
+        <div>
+          <label>URL</label>
+          <p id="detailWebhookUrl"></p>
+        </div>
+
+        <div>
+          <label>Created</label>
+          <p id="detailWebhookCreated"></p>
+        </div>
+
+        <div>
+          <label>Delivery Count</label>
+          <p id="detailDeliveryCount"></p>
+        </div>
+
+      </div>
+
+      <div class="events">
+
+        <h3>Subscribed Events</h3>
+
+        <div id="detailEvents"></div>
+
+      </div>
+
+    </section>
+
+
+    <!-- Deliveries -->
+
+    <section class="panel">
+
+      <div class="panel-header">
+
+        <div>
+          <h2>Recent Deliveries</h2>
+          <p>Latest webhook delivery attempts.</p>
+        </div>
+
+        <button id="refreshDeliveries" class="secondary">
+          Refresh
+        </button>
+
+      </div>
+
+      <div class="table-wrapper">
+
+        <table>
+
+          <thead>
+            <tr>
+              <th>Delivery ID</th>
+              <th>Webhook ID</th>
+              <th>Status</th>
+              <th>Attempts</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+
+          <tbody id="deliveriesTable">
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </section>
+
+
+    <!-- Delivery details -->
+
+    <section id="deliveryDetails" class="panel hidden">
+
+      <div class="panel-header">
+
+        <div>
+          <h2>Delivery Details</h2>
+          <p id="detailDeliveryId"></p>
+        </div>
+
+        <button id="closeDeliveryDetails" class="secondary">
+          Close
+        </button>
+
+      </div>
+
+      <div class="detail-grid">
+
+        <div>
+          <label>Status</label>
+          <p id="deliveryStatus"></p>
+        </div>
+
+        <div>
+          <label>Attempts</label>
+          <p id="deliveryAttempts"></p>
+        </div>
+
+        <div>
+          <label>Created</label>
+          <p id="deliveryCreated"></p>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+
+  <script src="/app.js"></script>
+
+</body>
+
+</html>
