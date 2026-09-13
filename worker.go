@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"math/rand"
@@ -11,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -71,13 +73,33 @@ func (w *Worker) process(
 	ctx context.Context,
 	delivery Delivery,
 ) {
-	attempts, ok := w.claimDelivery(ctx, delivery.ID)
 
-	if !ok {
-		return
+	attempts := delivery.Attempts
+
+	// For a scheduler-created job delivery.Status = processing
+	// so it skips claimDelivery()
+	if delivery.Status == DeliveryPending {
+		var err error
+
+		attempts, err = w.claimDelivery(ctx, delivery.ID)
+
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return
+			}
+
+			logDelivery(
+				delivery,
+				delivery.Attempts,
+				"claim_failed",
+				"error", err,
+			)
+
+			return
+		}
+
+		deliveryAttempts.Inc()
 	}
-
-	deliveryAttempts.Inc()
 
 	delivery.Attempts = attempts
 
@@ -359,7 +381,7 @@ func (w *Worker) handleFailure(
 func (w *Worker) claimDelivery(
 	ctx context.Context,
 	deliveryID string,
-) (int, bool) {
+) (int, error) {
 
 	var attempts int
 
@@ -394,10 +416,10 @@ func (w *Worker) claimDelivery(
 			deliveryID,
 			err,
 		)
-		return 0, false
+		return 0, err
 	}
 
-	return attempts, true
+	return attempts, err
 }
 
 func (w *Worker) markPermanentFailure(
@@ -496,19 +518,14 @@ func scheduleRetries(
 	rows, err := db.Query(
 		ctx,
 		`
-		SELECT
-			id,
-			event_id,
-			webhook_id,
-			status,
-			attempts
+		SELECT id
 		FROM deliveries
 		WHERE status = $1
 		  AND (
 			(attempts > 0 AND next_retry_at <= NOW())
 			OR
 			(attempts = 0 AND next_retry_at IS NULL)
-			)
+		  )
 		ORDER BY
 			CASE
 				WHEN next_retry_at IS NULL THEN created_at
@@ -526,22 +543,70 @@ func scheduleRetries(
 	defer rows.Close()
 
 	for rows.Next() {
-		var delivery Delivery
+		var deliveryID string
 
-		if err := rows.Scan(
-			&delivery.ID,
-			&delivery.EventID,
-			&delivery.WebhookID,
-			&delivery.Status,
-			&delivery.Attempts,
-		); err != nil {
+		if err := rows.Scan(&deliveryID); err != nil {
 			log.Printf("retry scheduler scan failed: %v", err)
 			continue
 		}
 
+		delivery, err := claimDeliveryForScheduler(
+			ctx,
+			db,
+			deliveryID,
+		)
+		if err != nil {
+			// Another worker/scheduler may have claimed it.
+			if errors.Is(err, pgx.ErrNoRows) {
+				continue
+			}
+
+			log.Printf(
+				"retry scheduler claim failed delivery_id=%s error=%v",
+				deliveryID,
+				err,
+			)
+			continue
+		}
+
 		if !queue.TryEnqueue(delivery) {
+			// We claimed it but couldn't put it into the queue.
+			// Return it to pending so it can be retried on
+			// the next scheduler tick.
+			_, err := db.Exec(
+				ctx,
+				`
+				UPDATE deliveries
+				SET
+					status = $1,
+					attempts = attempts - 1,
+					next_retry_at = CASE
+						WHEN attempts > 1 THEN NOW()
+						ELSE NULL
+					END,
+					lease_until = NULL
+				WHERE id = $2
+				  AND status = $3
+				`,
+				DeliveryPending,
+				deliveryID,
+				DeliveryProcessing,
+			)
+
+			if err != nil {
+				log.Printf(
+					"retry scheduler rollback failed delivery_id=%s error=%v",
+					deliveryID,
+					err,
+				)
+			}
+
 			return
 		}
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("retry scheduler rows failed: %v", err)
 	}
 }
 
@@ -583,4 +648,58 @@ func recoverStuckDeliveries(
 
 func isRetryableStatus(statusCode int) bool {
 	return statusCode >= 500 && statusCode <= 599
+}
+
+func claimDeliveryForScheduler(
+	ctx context.Context,
+	db *pgxpool.Pool,
+	deliveryID string,
+) (Delivery, error) {
+	var delivery Delivery
+
+	err := db.QueryRow(
+		ctx,
+		`
+		UPDATE deliveries
+		SET
+			status = $1,
+			attempts = attempts + 1,
+			next_retry_at = NULL,
+			lease_until = NOW() + INTERVAL '30 seconds'
+		WHERE id = $2
+		  AND status = $3
+		  AND (
+			(attempts > 0 AND next_retry_at <= NOW())
+			OR
+			(attempts = 0 AND next_retry_at IS NULL)
+		  )
+		RETURNING
+			id,
+			event_id,
+			webhook_id,
+			status,
+			attempts,
+			next_retry_at,
+			lease_until,
+			created_at
+		`,
+		DeliveryProcessing,
+		deliveryID,
+		DeliveryPending,
+	).Scan(
+		&delivery.ID,
+		&delivery.EventID,
+		&delivery.WebhookID,
+		&delivery.Status,
+		&delivery.Attempts,
+		&delivery.NextRetryAt,
+		&delivery.LeaseUntil,
+		&delivery.CreatedAt,
+	)
+
+	if err != nil {
+		return Delivery{}, err
+	}
+
+	return delivery, nil
 }

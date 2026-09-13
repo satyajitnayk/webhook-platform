@@ -110,12 +110,13 @@ func TestClaimDeliveryOnlyOneWorkerWins(t *testing.T) {
 				db,
 			)
 
-			_, ok := worker.claimDelivery(
+			_, err := worker.claimDelivery(
 				ctx,
 				deliveryID,
 			)
 
-			successes <- ok
+			successes <- err == nil
+
 		}()
 	}
 
@@ -437,6 +438,26 @@ func TestScheduleRetries_NewPendingDelivery(t *testing.T) {
 	// Run scheduler once.
 	scheduleRetries(ctx, db, q)
 
+	var status string
+
+	err = db.QueryRow(
+		ctx,
+		`SELECT status FROM deliveries WHERE id = $1`,
+		deliveryID,
+	).Scan(&status)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if status != DeliveryProcessing {
+		t.Fatalf(
+			"expected status=%s, got %s",
+			DeliveryProcessing,
+			status,
+		)
+	}
+
 	// It should now be in the queue.
 	select {
 	case got := <-q.Jobs():
@@ -549,6 +570,26 @@ func TestScheduleRetries_DueRetry(t *testing.T) {
 
 	scheduleRetries(ctx, db, q)
 
+	var status string
+
+	err = db.QueryRow(
+		ctx,
+		`SELECT status FROM deliveries WHERE id = $1`,
+		deliveryID,
+	).Scan(&status)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if status != DeliveryProcessing {
+		t.Fatalf(
+			"expected status=%s, got %s",
+			DeliveryProcessing,
+			status,
+		)
+	}
+
 	select {
 	case got := <-q.Jobs():
 		if got.ID != deliveryID {
@@ -561,5 +602,48 @@ func TestScheduleRetries_DueRetry(t *testing.T) {
 
 	default:
 		t.Fatal("expected due retry to be queued")
+	}
+}
+
+func TestScheduleRetries_DoesNotQueueSameDeliveryTwice(
+	t *testing.T,
+) {
+	ctx := context.Background()
+	db := setupTest(t)
+
+	q := NewQueue(10)
+	defer q.Close()
+
+	deliveryID := createTestDelivery(t, ctx, db)
+
+	// First scheduler run.
+	scheduleRetries(ctx, db, q)
+
+	// Second scheduler run.
+	scheduleRetries(ctx, db, q)
+
+	// We should have exactly one copy in the queue.
+	select {
+	case delivery := <-q.Jobs():
+		if delivery.ID != deliveryID {
+			t.Fatalf(
+				"expected delivery %s, got %s",
+				deliveryID,
+				delivery.ID,
+			)
+		}
+	default:
+		t.Fatal("expected delivery in queue")
+	}
+
+	// Queue must now be empty.
+	select {
+	case delivery := <-q.Jobs():
+		t.Fatalf(
+			"delivery %s was queued twice",
+			delivery.ID,
+		)
+	default:
+		// Expected.
 	}
 }
