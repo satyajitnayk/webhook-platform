@@ -648,3 +648,54 @@ func TestScheduleRetries_DoesNotQueueSameDeliveryTwice(
 		// Expected.
 	}
 }
+
+func TestScheduleRetries_QueueFullRestoresDelivery(t *testing.T) {
+	ctx := context.Background()
+	db := setupTest(t)
+
+	q := NewQueue(1)
+	defer q.Close()
+
+	// Fill the queue.
+	q.TryEnqueue(Delivery{
+		ID: "queue-full",
+	})
+
+	deliveryID := createTestDelivery(t, ctx, db)
+
+	scheduleRetries(ctx, db, q)
+
+	var (
+		status   string
+		attempts int
+	)
+
+	err := db.QueryRow(
+		ctx,
+		`
+		SELECT status, attempts
+		FROM deliveries
+		WHERE id = $1
+		`,
+		deliveryID,
+	).Scan(&status, &attempts)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if status != DeliveryPending {
+		t.Fatalf(
+			"expected status=%s, got %s",
+			DeliveryPending,
+			status,
+		)
+	}
+
+	if attempts != 0 {
+		t.Fatalf(
+			"expected attempts=0, got %d",
+			attempts,
+		)
+	}
+}

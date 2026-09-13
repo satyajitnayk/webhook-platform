@@ -579,7 +579,7 @@ func scheduleRetries(
 				UPDATE deliveries
 				SET
 					status = $1,
-					attempts = attempts - 1,
+					attempts = GREATEST(attempts - 1, 0),
 					next_retry_at = CASE
 						WHEN attempts > 1 THEN NOW()
 						ELSE NULL
