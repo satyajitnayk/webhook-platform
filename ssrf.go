@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -44,10 +45,12 @@ func ssrfSafeTransport(resolver IPResolver) *http.Transport {
 				return nil, fmt.Errorf("hostname resolved to no IP addresses")
 			}
 
+			allowLocal := os.Getenv("ALLOW_LOCAL_WEBHOOKS") == "true"
+
 			// Check ALL resolved IPs.
 			// If any address is private/reserved, reject the request.
 			for _, ip := range ips {
-				if isBlockedIP(ip.IP) {
+				if !allowLocal && isBlockedIP(ip.IP) {
 					return nil, fmt.Errorf(
 						"connection to private or reserved IP %s is blocked",
 						ip.IP,

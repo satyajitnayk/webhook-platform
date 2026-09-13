@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -23,6 +24,11 @@ func validateWebhookURL(rawURL string) error {
 
 	if u.Host == "" {
 		return errors.New("URL must have a host")
+	}
+
+	// Local webhook URLs are allowed only for local development/demo.
+	if os.Getenv("ALLOW_LOCAL_WEBHOOKS") == "true" {
+		return nil
 	}
 
 	hostname := strings.ToLower(u.Hostname())
