@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -13,7 +14,7 @@ import (
 func connectTestDB(ctx context.Context) (*pgxpool.Pool, error) {
 	return pgxpool.New(
 		ctx,
-		"postgres://postgres:postgres@localhost:5432/wh_platform_test",
+		os.Getenv("TEST_DATABASE_URL"),
 	)
 }
 

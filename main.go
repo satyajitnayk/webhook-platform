@@ -19,6 +19,12 @@ func main() {
 
 	initMetrics()
 
+	apiKey := os.Getenv("WEBHOOK_API_KEY")
+
+	if apiKey == "" {
+		log.Fatal("WEBHOOK_API_KEY is required")
+	}
+
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
 		os.Interrupt,

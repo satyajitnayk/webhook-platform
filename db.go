@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func connectDB(ctx context.Context) (*pgxpool.Pool, error) {
-	dsn := "postgres://postgres:postgres@localhost:5432/wh_platform"
+	dsn := os.Getenv("DATABASE_URL")
 
 	db, err := pgxpool.New(ctx, dsn)
 	if err != nil {
