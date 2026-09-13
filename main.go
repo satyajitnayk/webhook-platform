@@ -54,52 +54,85 @@ func main() {
 		queue,
 	)
 
-	privateMux := http.NewServeMux()
+	authProvider := authMiddleware(apiKey)
 
-	privateMux.Handle(
+	apiMux := http.NewServeMux()
+
+	apiMux.Handle(
 		"POST /webhooks",
 		createWebhookHandler(db),
 	)
 
-	privateMux.Handle(
+	apiMux.Handle(
 		"GET /webhooks",
 		getWebhooksHandler(db),
 	)
 
-	privateMux.Handle(
+	apiMux.Handle(
 		"GET /webhooks/{id}",
 		getWebhookHandler(db),
 	)
 
-	privateMux.Handle(
+	apiMux.Handle(
 		"POST /events",
 		createEventHandler(db, queue),
 	)
 
-	privateMux.Handle(
+	apiMux.Handle(
 		"GET /deliveries",
 		getDeliveriesHandler(db),
 	)
 
-	privateMux.Handle(
+	apiMux.Handle(
 		"GET /deliveries/{id}",
 		getDeliveryHandler(db),
 	)
 
-	authProvider := authMiddleware(apiKey)
-	protectedHandler := authProvider(privateMux)
+	protectedAPI := authProvider(apiMux)
 
 	globalMux := http.NewServeMux()
 
 	globalMux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	})
 
-	globalMux.Handle("/metrics", promhttp.Handler())
+	globalMux.Handle(
+		"/metrics",
+		promhttp.Handler(),
+	)
 
-	// Fallback/Catch-all route passes everything else to the protected handler
-	globalMux.Handle("/", protectedHandler)
+	// All API routes are protected.
+	globalMux.Handle(
+		"/webhooks",
+		protectedAPI,
+	)
+
+	globalMux.Handle(
+		"/webhooks/",
+		protectedAPI,
+	)
+
+	globalMux.Handle(
+		"/events",
+		protectedAPI,
+	)
+
+	globalMux.Handle(
+		"/deliveries",
+		protectedAPI,
+	)
+
+	globalMux.Handle(
+		"/deliveries/",
+		protectedAPI,
+	)
+
+	// Frontend is public.
+	globalMux.Handle(
+		"/",
+		http.FileServer(http.Dir("./web")),
+	)
 
 	server := &http.Server{
 		Addr:    ":8080",
