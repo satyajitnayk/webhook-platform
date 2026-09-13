@@ -171,3 +171,147 @@ func createEvent(
 
 	return eventID.String(), len(deliveries), deliveries, nil
 }
+
+func getWebhooks(
+	ctx context.Context,
+	db *pgxpool.Pool,
+) ([]Webhook, error) {
+	rows, err := db.Query(
+		ctx,
+		`
+		SELECT
+			id,
+			url,
+			created_at
+		FROM webhooks
+		ORDER BY created_at DESC
+		`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	webhooks := make([]Webhook, 0)
+
+	for rows.Next() {
+		var webhook Webhook
+
+		if err := rows.Scan(
+			&webhook.ID,
+			&webhook.URL,
+			&webhook.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		webhooks = append(webhooks, webhook)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return webhooks, nil
+}
+
+func getWebhook(
+	ctx context.Context,
+	db *pgxpool.Pool,
+	webhookID string,
+) (WebhookDetails, error) {
+	var webhook WebhookDetails
+
+	err := db.QueryRow(
+		ctx,
+		`
+		SELECT
+			w.id,
+			w.url,
+			w.created_at,
+			COALESCE(
+				ARRAY(
+					SELECT s.event_type
+					FROM subscriptions s
+					WHERE s.webhook_id = w.id
+					ORDER BY s.event_type
+				),
+				ARRAY[]::text[]
+			),
+			(
+				SELECT COUNT(*)
+				FROM deliveries d
+				WHERE d.webhook_id = w.id
+			)
+		FROM webhooks w
+		WHERE w.id = $1
+		`,
+		webhookID,
+	).Scan(
+		&webhook.ID,
+		&webhook.URL,
+		&webhook.CreatedAt,
+		&webhook.Events,
+		&webhook.DeliveryCount,
+	)
+
+	if err != nil {
+		return WebhookDetails{}, err
+	}
+
+	return webhook, nil
+}
+
+func getDeliveries(
+	ctx context.Context,
+	db *pgxpool.Pool,
+) ([]Delivery, error) {
+	rows, err := db.Query(
+		ctx,
+		`
+		SELECT
+			id,
+			event_id,
+			webhook_id,
+			status,
+			attempts,
+			next_retry_at,
+			lease_until,
+			created_at
+		FROM deliveries
+		ORDER BY created_at DESC
+		LIMIT 100
+		`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	deliveries := make([]Delivery, 0)
+
+	for rows.Next() {
+		var delivery Delivery
+
+		if err := rows.Scan(
+			&delivery.ID,
+			&delivery.EventID,
+			&delivery.WebhookID,
+			&delivery.Status,
+			&delivery.Attempts,
+			&delivery.NextRetryAt,
+			&delivery.LeaseUntil,
+			&delivery.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		deliveries = append(deliveries, delivery)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return deliveries, nil
+}

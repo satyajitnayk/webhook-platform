@@ -62,8 +62,23 @@ func main() {
 	)
 
 	privateMux.Handle(
+		"GET /webhooks",
+		getWebhooksHandler(db),
+	)
+
+	privateMux.Handle(
+		"GET /webhooks/{id}",
+		getWebhookHandler(db),
+	)
+
+	privateMux.Handle(
 		"POST /events",
 		createEventHandler(db, queue),
+	)
+
+	privateMux.Handle(
+		"GET /deliveries",
+		getDeliveriesHandler(db),
 	)
 
 	privateMux.Handle(

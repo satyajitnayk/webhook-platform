@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
@@ -179,6 +180,103 @@ func getDeliveryHandler(db *pgxpool.Pool) http.HandlerFunc {
 				"failed to encode response",
 				http.StatusInternalServerError,
 			)
+		}
+	}
+}
+
+func getWebhooksHandler(
+	db *pgxpool.Pool,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		webhooks, err := getWebhooks(r.Context(), db)
+		if err != nil {
+			log.Printf("failed to get webhooks: %v", err)
+			http.Error(
+				w,
+				"internal server error",
+				http.StatusInternalServerError,
+			)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(webhooks); err != nil {
+			log.Printf("failed encoding webhooks: %v", err)
+		}
+	}
+}
+
+func getWebhookHandler(
+	db *pgxpool.Pool,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		webhookID := r.PathValue("id")
+
+		webhook, err := getWebhook(
+			r.Context(),
+			db,
+			webhookID,
+		)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				http.Error(
+					w,
+					"webhook not found",
+					http.StatusNotFound,
+				)
+				return
+			}
+
+			log.Printf(
+				"failed to get webhook=%s: %v",
+				webhookID,
+				err,
+			)
+
+			http.Error(
+				w,
+				"internal server error",
+				http.StatusInternalServerError,
+			)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(webhook); err != nil {
+			log.Printf(
+				"failed encoding webhook=%s: %v",
+				webhookID,
+				err,
+			)
+		}
+	}
+}
+
+func getDeliveriesHandler(
+	db *pgxpool.Pool,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		deliveries, err := getDeliveries(
+			r.Context(),
+			db,
+		)
+		if err != nil {
+			log.Printf("failed to get deliveries: %v", err)
+
+			http.Error(
+				w,
+				"internal server error",
+				http.StatusInternalServerError,
+			)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(deliveries); err != nil {
+			log.Printf("failed encoding deliveries: %v", err)
 		}
 	}
 }
