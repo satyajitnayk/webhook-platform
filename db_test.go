@@ -7,11 +7,20 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
 )
 
 var testDB *pgxpool.Pool
 
 func TestMain(m *testing.M) {
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, relying on system environment variables")
+	}
+
+	if os.Getenv("TEST_DATABASE_URL") == "" {
+		log.Fatal("TEST_DATABASE_URL environment variable is required to run tests")
+	}
+
 	ctx := context.Background()
 
 	var err error
