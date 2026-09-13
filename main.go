@@ -54,33 +54,41 @@ func main() {
 		queue,
 	)
 
-	mux := http.NewServeMux()
+	privateMux := http.NewServeMux()
 
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+	privateMux.Handle(
+		"POST /webhooks",
+		createWebhookHandler(db),
+	)
+
+	privateMux.Handle(
+		"POST /events",
+		createEventHandler(db, queue),
+	)
+
+	privateMux.Handle(
+		"GET /deliveries/{id}",
+		getDeliveryHandler(db),
+	)
+
+	authProvider := authMiddleware(apiKey)
+	protectedHandler := authProvider(privateMux)
+
+	globalMux := http.NewServeMux()
+
+	globalMux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
 
-	mux.Handle(
-		"POST /webhooks",
-		authMiddleware(http.HandlerFunc(createWebhookHandler(db))),
-	)
+	globalMux.Handle("/metrics", promhttp.Handler())
 
-	mux.Handle(
-		"POST /events",
-		authMiddleware(http.HandlerFunc(createEventHandler(db, queue))),
-	)
-
-	mux.Handle(
-		"GET /deliveries/{id}",
-		authMiddleware(http.HandlerFunc(getDeliveryHandler(db))),
-	)
-
-	mux.Handle("/metrics", promhttp.Handler())
+	// Fallback/Catch-all route passes everything else to the protected handler
+	globalMux.Handle("/", protectedHandler)
 
 	server := &http.Server{
 		Addr:    ":8080",
-		Handler: mux,
+		Handler: globalMux,
 	}
 
 	// Start HTTP server
