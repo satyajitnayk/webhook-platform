@@ -366,3 +366,30 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* Event form */
+select,
+textarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  background: white;
+}
+select:focus,
+textarea:focus {
+  border-color: #6b7280;
+}
+textarea {
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  line-height: 1.5;
+}
+#eventForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}

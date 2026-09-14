@@ -141,6 +141,25 @@
 
     </section>
 
+    <!-- Send test event -->
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>Send Test Event</h2>
+          <p>Send an event to a registered webhook.</p>
+        </div>
+      </div>
+      <form id="eventForm">
+        <div class="form-group"> <label for="eventWebhook"> Webhook </label> <select id="eventWebhook" required>
+            <option value=""> Select a webhook </option>
+          </select> </div>
+        <div class="form-group"> <label for="eventType"> Event Type </label> <input id="eventType" type="text"
+            placeholder="order.created" required> </div>
+        <div class="form-group"> <label for="eventPayload"> Payload </label> <textarea id="eventPayload" rows="7"
+            placeholder='{"order_id":"123","amount":100}' required>{"order_id":"123"}</textarea> </div>
+        <div class="form-action"> <button type="submit"> Send Test Event </button> </div>
+      </form>
+    </section>
 
     <!-- Webhook details -->
 

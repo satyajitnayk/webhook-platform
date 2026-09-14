@@ -138,6 +138,8 @@ async function loadWebhooks() {
 
     table.appendChild(row);
   }
+
+  await loadWebhookOptions();
 }
 
 /* -------------------------
@@ -188,6 +190,55 @@ async function loadWebhookDetails(id) {
     showError(error.message);
   }
 }
+
+document
+  .getElementById('eventForm')
+  .addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    clearMessages();
+
+    const webhookId = document.getElementById('eventWebhook').value;
+
+    const eventType = document.getElementById('eventType').value.trim();
+
+    const payloadText = document.getElementById('eventPayload').value.trim();
+
+    if (!webhookId) {
+      showError('Select a webhook.');
+      return;
+    }
+
+    let payload;
+
+    try {
+      payload = JSON.parse(payloadText);
+    } catch {
+      showError('Payload must be valid JSON.');
+      return;
+    }
+
+    try {
+      const result = await apiFetch('/events', {
+        method: 'POST',
+
+        headers: {
+          'Content-Type': 'application/json',
+        },
+
+        body: JSON.stringify({
+          type: eventType,
+          payload: payload,
+        }),
+      });
+
+      showSuccess(`Event created. ${result.deliveries} delivery created.`);
+
+      await loadDeliveries();
+    } catch (error) {
+      showError(error.message);
+    }
+  });
 
 /* -------------------------
    Create Webhook
@@ -399,6 +450,28 @@ async function refreshDashboard() {
   clearMessages();
 
   await Promise.all([loadWebhooks(), loadDeliveries()]);
+}
+
+async function loadWebhookOptions() {
+  const webhooks = await apiFetch('/webhooks');
+
+  const select = document.getElementById('eventWebhook');
+
+  select.innerHTML = `
+        <option value="">
+            Select a webhook
+        </option>
+    `;
+
+  for (const webhook of webhooks) {
+    const option = document.createElement('option');
+
+    option.value = webhook.id;
+
+    option.textContent = `${webhook.url} (${webhook.id})`;
+
+    select.appendChild(option);
+  }
 }
 
 document
