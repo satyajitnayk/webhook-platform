@@ -235,6 +235,7 @@ document
       showSuccess(`Event created. ${result.deliveries} delivery created.`);
 
       await loadDeliveries();
+      startDeliveryPolling();
     } catch (error) {
       showError(error.message);
     }
@@ -373,6 +374,8 @@ async function loadDeliveries() {
 
     table.appendChild(row);
   }
+
+  return deliveries;
 }
 
 /* -------------------------
@@ -472,6 +475,49 @@ async function loadWebhookOptions() {
 
     select.appendChild(option);
   }
+}
+
+let deliveryPollTimer = null;
+
+function startDeliveryPolling() {
+  if (deliveryPollTimer !== null) {
+    return;
+  }
+
+  deliveryPollTimer = setInterval(async () => {
+    try {
+      const deliveries = await loadDeliveries();
+
+      const hasActiveDeliveries = deliveries.some(
+        (delivery) =>
+          delivery.status === 'pending' || delivery.status === 'processing',
+      );
+
+      if (!hasActiveDeliveries) {
+        stopDeliveryPolling();
+      }
+    } catch (error) {
+      console.error('delivery polling failed:', error);
+    }
+  }, 500);
+}
+
+function stopDeliveryPolling() {
+  if (deliveryPollTimer === null) {
+    return;
+  }
+
+  clearInterval(deliveryPollTimer);
+  deliveryPollTimer = null;
+}
+
+async function hasPendingDeliveries() {
+  const deliveries = await apiFetch('/deliveries');
+
+  return deliveries.some(
+    (delivery) =>
+      delivery.status === 'pending' || delivery.status === 'processing',
+  );
 }
 
 document

@@ -32,137 +32,143 @@
 
 
     <!-- Dashboard -->
+    <details class="panel" open>
+      <summary>Dashboard</summary>
+      <section class="stats">
 
-    <section class="stats">
+        <div class="stat-card">
+          <span>Webhooks</span>
+          <strong id="webhookCount">-</strong>
+        </div>
 
-      <div class="stat-card">
-        <span>Webhooks</span>
-        <strong id="webhookCount">-</strong>
-      </div>
+        <div class="stat-card">
+          <span>Deliveries</span>
+          <strong id="deliveryCount">-</strong>
+        </div>
 
-      <div class="stat-card">
-        <span>Deliveries</span>
-        <strong id="deliveryCount">-</strong>
-      </div>
+        <div class="stat-card">
+          <span>Successful</span>
+          <strong id="successCount">-</strong>
+        </div>
 
-      <div class="stat-card">
-        <span>Successful</span>
-        <strong id="successCount">-</strong>
-      </div>
+        <div class="stat-card">
+          <span>Failed</span>
+          <strong id="failedCount">-</strong>
+        </div>
 
-      <div class="stat-card">
-        <span>Failed</span>
-        <strong id="failedCount">-</strong>
-      </div>
+        <div class="stat-card">
+          <span>Pending</span>
+          <strong id="pendingCount">-</strong>
+        </div>
 
-      <div class="stat-card">
-        <span>Pending</span>
-        <strong id="pendingCount">-</strong>
-      </div>
-
-    </section>
+      </section>
+    </details>
 
 
     <!-- Create webhook -->
-
-    <section class="panel">
-
-      <div class="panel-header">
-        <div>
-          <h2>Create Webhook</h2>
-          <p>Register a destination for webhook events.</p>
-        </div>
-      </div>
-
-      <form id="webhookForm">
-
-        <div class="form-row">
-
-          <div class="form-group">
-            <label for="webhookUrl">Webhook URL</label>
-
-            <input id="webhookUrl" type="url" placeholder="https://example.com/webhook" required>
+    <details class="panel">
+      <summary>Create Webhook</summary>
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Create Webhook</h2>
+            <p>Register a destination for webhook events.</p>
           </div>
-
-          <div class="form-group">
-            <label for="eventTypes">
-              Event Types
-            </label>
-
-            <input id="eventTypes" type="text" placeholder="order.created, order.updated" required>
-          </div>
-
-          <div class="form-action">
-            <button type="submit">
-              Create Webhook
-            </button>
-          </div>
-
         </div>
 
-      </form>
+        <form id="webhookForm">
 
-    </section>
+          <div class="form-row">
 
+            <div class="form-group">
+              <label for="webhookUrl">Webhook URL</label>
 
-    <!-- Webhooks -->
+              <input id="webhookUrl" type="url" placeholder="https://example.com/webhook" required>
+            </div>
 
-    <section class="panel">
+            <div class="form-group">
+              <label for="eventTypes">
+                Event Types
+              </label>
 
-      <div class="panel-header">
-        <div>
-          <h2>Webhooks</h2>
-          <p>Registered webhook destinations.</p>
-        </div>
+              <input id="eventTypes" type="text" placeholder="order.created, order.updated" required>
+            </div>
 
-        <button id="refreshWebhooks" class="secondary">
-          Refresh
-        </button>
-      </div>
+            <div class="form-action">
+              <button type="submit">
+                Create Webhook
+              </button>
+            </div>
 
-      <div class="table-wrapper">
+          </div>
 
-        <table>
+        </form>
 
-          <thead>
-            <tr>
-              <th>URL</th>
-              <th>Created</th>
-              <th>ID</th>
-            </tr>
-          </thead>
-
-          <tbody id="webhooksTable">
-          </tbody>
-
-        </table>
-
-      </div>
-
-    </section>
+      </section>
+    </details>
 
     <!-- Send test event -->
-    <section class="panel">
-      <div class="panel-header">
-        <div>
-          <h2>Send Test Event</h2>
-          <p>Send an event to a registered webhook.</p>
+    <details class="panel">
+      <summary>Send Test Event</summary>
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Send Test Event</h2>
+            <p>Send an event to a registered webhook.</p>
+          </div>
         </div>
-      </div>
-      <form id="eventForm">
-        <div class="form-group"> <label for="eventWebhook"> Webhook </label> <select id="eventWebhook" required>
-            <option value=""> Select a webhook </option>
-          </select> </div>
-        <div class="form-group"> <label for="eventType"> Event Type </label> <input id="eventType" type="text"
-            placeholder="order.created" required> </div>
-        <div class="form-group"> <label for="eventPayload"> Payload </label> <textarea id="eventPayload" rows="7"
-            placeholder='{"order_id":"123","amount":100}' required>{"order_id":"123"}</textarea> </div>
-        <div class="form-action"> <button type="submit"> Send Test Event </button> </div>
-      </form>
-    </section>
+        <form id="eventForm">
+          <div class="form-group"> <label for="eventWebhook"> Webhook </label> <select id="eventWebhook" required>
+              <option value=""> Select a webhook </option>
+            </select> </div>
+          <div class="form-group"> <label for="eventType"> Event Type </label> <input id="eventType" type="text"
+              placeholder="order.created" required> </div>
+          <div class="form-group"> <label for="eventPayload"> Payload </label> <textarea id="eventPayload" rows="7"
+              placeholder='{"order_id":"123","amount":100}' required>{"order_id":"123"}</textarea> </div>
+          <div class="form-action"> <button type="submit"> Send Test Event </button> </div>
+        </form>
+      </section>
+    </details>
+
+    <!-- Webhooks -->
+    <details class="panel">
+      <summary>Webhooks</summary>
+      <section class="panel">
+
+        <div class="panel-header">
+          <div>
+            <h2>Webhooks</h2>
+            <p>Registered webhook destinations.</p>
+          </div>
+
+          <button id="refreshWebhooks" class="secondary">
+            Refresh
+          </button>
+        </div>
+
+        <div class="table-wrapper">
+
+          <table>
+
+            <thead>
+              <tr>
+                <th>URL</th>
+                <th>Created</th>
+                <th>ID</th>
+              </tr>
+            </thead>
+
+            <tbody id="webhooksTable">
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </section>
+    </details>
 
     <!-- Webhook details -->
-
     <section id="webhookDetails" class="panel hidden">
 
       <div class="panel-header">
@@ -209,48 +215,49 @@
 
 
     <!-- Deliveries -->
+    <details class="panel" open>
+      <summary>Deliveries</summary>
+      <section class="panel">
 
-    <section class="panel">
+        <div class="panel-header">
 
-      <div class="panel-header">
+          <div>
+            <h2>Recent Deliveries</h2>
+            <p>Latest webhook delivery attempts.</p>
+          </div>
 
-        <div>
-          <h2>Recent Deliveries</h2>
-          <p>Latest webhook delivery attempts.</p>
+          <button id="refreshDeliveries" class="secondary">
+            Refresh
+          </button>
+
         </div>
 
-        <button id="refreshDeliveries" class="secondary">
-          Refresh
-        </button>
+        <div class="table-wrapper">
 
-      </div>
+          <table>
 
-      <div class="table-wrapper">
+            <thead>
+              <tr>
+                <th>Delivery ID</th>
+                <th>Webhook ID</th>
+                <th>Status</th>
+                <th>Attempts</th>
+                <th>Created</th>
+              </tr>
+            </thead>
 
-        <table>
+            <tbody id="deliveriesTable">
+            </tbody>
 
-          <thead>
-            <tr>
-              <th>Delivery ID</th>
-              <th>Webhook ID</th>
-              <th>Status</th>
-              <th>Attempts</th>
-              <th>Created</th>
-            </tr>
-          </thead>
+          </table>
 
-          <tbody id="deliveriesTable">
-          </tbody>
+        </div>
 
-        </table>
-
-      </div>
-
-    </section>
+      </section>
+    </details>
 
 
     <!-- Delivery details -->
-
     <section id="deliveryDetails" class="panel hidden">
 
       <div class="panel-header">

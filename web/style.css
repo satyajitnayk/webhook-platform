@@ -393,3 +393,30 @@ textarea {
   flex-direction: column;
   gap: 16px;
 }
+
+.panel summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 16px;
+  list-style: none;
+}
+
+.panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.panel summary::before {
+  content: '▶';
+  display: inline-block;
+  margin-right: 10px;
+  font-size: 12px;
+  transition: transform 0.2s ease;
+}
+
+.panel[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.panel-content {
+  padding: 0 16px 16px;
+}
